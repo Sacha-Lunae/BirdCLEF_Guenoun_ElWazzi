@@ -90,20 +90,51 @@ def preprocess_audio(filepath, rgb):
     else : 
         return get_spectrogram_bw(audio)
 
-def data_generator(df, batch_size=32, rgb=False):
+
+def data_generator(df, batch_size, img_size=(128, 128), rgb=False):
     while True:
-        batch_data = df.sample(n=batch_size)
-        spectrograms = []
-        metas = []
-        targets = []
+        batch_paths = np.random.choice(a=df.filepath, size=batch_size)
+        batch_input_img = []
+        batch_input_meta = []
+        batch_output = []
         
-        for _, row in batch_data.iterrows():
-            spectrogram = preprocess_audio(row['filepath'], rgb)
-            meta = [row['latitude'], row['longitude']]
-            target = row['target']
+        for input_path in batch_paths:
+            try:
+                # Load and process the audio file
+                y, sr = librosa.load(input_path, sr=None)
+                # Convert audio to spectrogram (this function should be implemented as per your requirements)
+                spectrogram = audio_to_spectrogram(y, sr, img_size)
+                
+                # Convert to RGB or grayscale
+                if rgb:
+                    spectrogram = np.stack((spectrogram,) * 3, axis=-1)  # Convert to RGB
+                else:
+                    spectrogram = spectrogram[..., np.newaxis]  # Keep as grayscale
+                
+                # Append the spectrogram to the batch
+                batch_input_img.append(spectrogram)
+                
+                # Extract metadata (latitude and longitude)
+                metadata = df[df.filepath == input_path][['latitude', 'longitude']].values[0]
+                batch_input_meta.append(metadata)
+                
+                # Extract target
+                target = df[df.filepath == input_path]['target'].values[0]
+                batch_output.append(target)
+            except Exception as e:
+                print(f"Error processing {input_path}: {e}")
+                continue
             
-            spectrograms.append(spectrogram)
-            metas.append(meta)
-            targets.append(target)
+        batch_input_img = np.array(batch_input_img)
+        batch_input_meta = np.array(batch_input_meta)
+        batch_output = np.array(batch_output)
         
-        yield [np.array(spectrograms), np.array(metas)], np.array(targets)
+        yield [batch_input_img, batch_input_meta], batch_output
+
+def audio_to_spectrogram(y, sr, img_size):
+    # Convert audio to spectrogram
+    spectrogram = librosa.feature.melspectrogram(y, sr=sr, n_mels=img_size[0], fmax=8000)
+    spectrogram = librosa.power_to_db(spectrogram, ref=np.max)
+    # Resize to target image size
+    spectrogram = cv2.resize(spectrogram, img_size)
+    return spectrogram
