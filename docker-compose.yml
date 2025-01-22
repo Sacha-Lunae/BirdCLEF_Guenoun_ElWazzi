@@ -1,0 +1,96 @@
+version: "3.8"
+
+services:
+  ###########################################################################
+  # POSTGRES
+  ###########################################################################
+  postgres:
+    image: postgres:14
+    container_name: postgres
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin
+      - POSTGRES_DB=maindb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  ###########################################################################
+  # MONGODB
+  ###########################################################################
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  ###########################################################################
+  # MINIO
+  ###########################################################################
+  minio:
+    image: minio/minio
+    container_name: minio
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    ports:
+      - "9000:9000"   # MinIO S3-compatible API
+      - "9001:9001"   # MinIO console UI
+    volumes:
+      - minio_data:/data
+
+  ###########################################################################
+  # AIRFLOW (single-container for simplicity)
+  ###########################################################################
+  airflow:
+    image: apache/airflow:2.7.1
+    container_name: airflow
+    depends_on:
+      - postgres
+    environment:
+      # Use LocalExecutor to run tasks in parallel on the same machine
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      
+      # Point Airflow to Postgres for its metadata DB
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://admin:admin@postgres:5432/maindb
+      
+      # Generate a Fernet key if you don't already have one
+      # e.g. python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+      - AIRFLOW__CORE__FERNET_KEY=YOUR_FERNET_KEY_HERE
+      
+      # Secret key for Airflow's webserver
+      - AIRFLOW__WEBSERVER__SECRET_KEY=some_random_secret_key
+      
+      # (Optional) Whether to load example DAGs
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      
+      # (Optional) the default time zone
+      - AIRFLOW__CORE__DEFAULT_TIMEZONE=UTC
+    ports:
+      - "8080:8080"
+    command: >
+      bash -c "
+      airflow db init &&
+      airflow users create \
+        --username admin \
+        --password admin \
+        --firstname Admin \
+        --lastname User \
+        --role Admin \
+        --email admin@example.com &&
+      airflow webserver --port 8080
+      "
+    volumes:
+      # DAGs, logs, and plugins can be mounted locally
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+
+volumes:
+  postgres_data:
+  mongo_data:
+  minio_data:

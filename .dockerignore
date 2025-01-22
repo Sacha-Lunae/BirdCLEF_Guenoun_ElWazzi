@@ -1,0 +1,14 @@
+# Ignore the local data directory for BirdClef, especially if it's large
+birdclef-2024/
+
+# Ignore your local models or checkpoints
+models/
+
+# Ignore your local notebooks (if not needed for image build)
+*.ipynb
+
+# Ignore the .git folder
+.git/
+
+# Optional: anything else you don't need inside the container
+*.log
