@@ -42,39 +42,56 @@ services:
       - "9001:9001"   # MinIO console UI
     volumes:
       - minio_data:/data
+  ###########################################################################
+  # MINIO SETUP (Bucket creation)
+  ###########################################################################
+  minio-setup:
+    image: minio/mc
+    container_name: minio-setup
+    depends_on:
+      - minio
+    restart: "no"
+    entrypoint: >
+      /bin/sh -c "
+      echo '--- Waiting 10s for MinIO to be ready...';
+      sleep 10;
+
+      echo '--- Creating buckets...';
+      mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      mc mb --region=us-east-1 myminio/raw-bucket || echo 'raw-bucket already exists';
+      mc mb --region=us-east-1 myminio/staging-bucket || echo 'staging-bucket already exists';
+      mc mb --region=us-east-1 myminio/curated-bucket || echo 'curated-bucket already exists';
+
+      echo '--- Buckets created/verified. Exiting now.';
+      "
+
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
 
   ###########################################################################
-  # AIRFLOW (single-container for simplicity)
+  # AIRFLOW (en mode single-container pour plus de simplicité)
   ###########################################################################
   airflow:
-    image: apache/airflow:2.7.1
+    build:
+      context: .
+      dockerfile: ./DockerFiles/Airflow/Dockerfile.airflow
     container_name: airflow
     depends_on:
       - postgres
     environment:
-      # Use LocalExecutor to run tasks in parallel on the same machine
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      
-      # Point Airflow to Postgres for its metadata DB
-      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://admin:admin@postgres:5432/maindb
-      
-      # Generate a Fernet key if you don't already have one
-      # e.g. python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-      - AIRFLOW__CORE__FERNET_KEY=YOUR_FERNET_KEY_HERE
-      
-      # Secret key for Airflow's webserver
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://admin:admin@postgres:5432/maindb
+      - AIRFLOW__CORE__FERNET_KEY="GH6NOdg_nafT5exv5AD33vQD-nNRnV2HfFFut7nToeE="
       - AIRFLOW__WEBSERVER__SECRET_KEY=some_random_secret_key
-      
-      # (Optional) Whether to load example DAGs
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      
-      # (Optional) the default time zone
       - AIRFLOW__CORE__DEFAULT_TIMEZONE=UTC
     ports:
       - "8080:8080"
     command: >
       bash -c "
-      airflow db init &&
+      airflow db migrate &&
+      airflow connections create-default-connections &&
       airflow users create \
         --username admin \
         --password admin \
@@ -82,13 +99,38 @@ services:
         --lastname User \
         --role Admin \
         --email admin@example.com &&
+      airflow scheduler &
       airflow webserver --port 8080
       "
     volumes:
-      # DAGs, logs, and plugins can be mounted locally
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
+
+
+  ###########################################################################
+  # API FLASK
+  ###########################################################################
+  api:
+    build: ./DockerFiles/api/Dockerfile.api
+    container_name: flask_api
+    depends_on:
+      - postgres
+      - mongodb
+      - minio
+    ports:
+      - "8000:8000"
+    environment:
+      # Variables pour la connexion à MinIO
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+
+      # Variables pour la connexion à PostgreSQL
+      - POSTGRES_URI=postgresql+psycopg2://admin:admin@postgres:5432/maindb
+
+      # Variables pour la connexion à Mongo
+      - MONGO_URI=mongodb://mongodb:27017
 
 volumes:
   postgres_data:

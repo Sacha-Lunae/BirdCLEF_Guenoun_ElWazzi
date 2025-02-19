@@ -1,0 +1,20 @@
+# api/Dockerfile
+
+FROM python:3.9-slim
+
+# On met à jour pip
+RUN pip install --upgrade pip
+
+# Définir le répertoire de travail
+WORKDIR /app
+
+# Copier les dépendances
+COPY ./Dockerfiles/api/requirements.txt .
+# RUN su airflow -c "pip install --no-cache-dir -r requirements.txt"
+RUN pip install -r requirements.txt
+
+# Copier le code de l'API
+COPY . .
+
+# Lancement de l'application
+CMD ["python", "main.py"]
