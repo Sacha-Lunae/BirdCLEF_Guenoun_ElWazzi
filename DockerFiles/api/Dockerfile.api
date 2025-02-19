@@ -9,7 +9,7 @@ RUN pip install --upgrade pip
 WORKDIR /app
 
 # Copier les dépendances
-COPY ./Dockerfiles/api/requirements.txt .
+COPY requirements.txt .
 # RUN su airflow -c "pip install --no-cache-dir -r requirements.txt"
 RUN pip install -r requirements.txt
 

@@ -112,7 +112,10 @@ services:
   # API FLASK
   ###########################################################################
   api:
-    build: ./DockerFiles/api/Dockerfile.api
+    build:
+      context: ./DockerFiles/api
+      dockerfile: Dockerfile.api
+    
     container_name: flask_api
     depends_on:
       - postgres
