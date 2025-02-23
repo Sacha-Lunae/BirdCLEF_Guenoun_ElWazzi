@@ -1,16 +1,24 @@
-# DockerFiles/airflow/Dockerfile.airflow
-
 FROM apache/airflow:2.7.1
 
 # Switch to root to install packages
 USER root
 
-# Copy requirements into the container
+# Copy the Airflow requirements (if any additional ones are needed)
 COPY ./DockerFiles/Airflow/requirements.txt /tmp/requirements.txt
-
-# Install Python dependencies from requirements.txt
 RUN su airflow -c "pip install --no-cache-dir -r /tmp/requirements.txt"
+
+# Install additional system dependencies
 RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
 
-# Switch back to airflow user
+# Copy the entrypoint script into the container
+COPY ./DockerFiles/Airflow/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Switch back to the airflow user
 USER airflow
+
+# Force the webserver to use port 8080
+ENV AIRFLOW__WEBSERVER__WEB_SERVER_PORT=8080
+
+# Use our entrypoint script (it will override the default CMD)
+ENTRYPOINT ["/entrypoint.sh"]

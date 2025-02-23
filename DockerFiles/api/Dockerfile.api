@@ -1,20 +1,22 @@
-# api/Dockerfile
+# DockerFiles/api/Dockerfile.api
 
 FROM python:3.9-slim
 
-# On met à jour pip
+# Upgrade pip
 RUN pip install --upgrade pip
 
-# Définir le répertoire de travail
+# Workdir
 WORKDIR /app
 
-# Copier les dépendances
+# Copy requirements
 COPY requirements.txt .
-# RUN su airflow -c "pip install --no-cache-dir -r requirements.txt"
 RUN pip install -r requirements.txt
 
-# Copier le code de l'API
+# Copy the rest of the code
 COPY . .
 
-# Lancement de l'application
+# Expose the port if you like (not strictly required)
+EXPOSE 8000
+
+# Run the Flask app
 CMD ["python", "main.py"]
