@@ -92,7 +92,7 @@ def main():
     endpoint = "localhost:9000"
     access_key = "minioadmin"
     secret_key = "minioadmin"
-    bucket_name = "bucket-raw"
+    bucket_name = "raw-bucket"
 
     # Téléversement
     upload_to_minio(endpoint, access_key, secret_key, bucket_name, raw_dir="raw-test")
