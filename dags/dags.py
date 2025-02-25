@@ -25,6 +25,10 @@ def run_preprocess_metadata_to_staging():
     from scripts.preprocess_metadata_to_staging import main
     main()
 
+def run_staging_to_curated()
+    from scripts.process_to_curated import main
+    main()
+
 default_args = {
     'owner': 'airflow',
     'retries': 1,
