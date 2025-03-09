@@ -25,7 +25,7 @@ def run_preprocess_metadata_to_staging():
     from scripts.preprocess_metadata_to_staging import main
     main()
 
-def run_staging_to_curated()
+def run_staging_to_curated():
     from scripts.process_to_curated import main
     main()
 
@@ -57,5 +57,10 @@ with DAG(
         task_id='ingest_metadata_into_mongo',
         python_callable=run_preprocess_metadata_to_staging
     )
+    
+    t4 = PythonOperator(
+        task_id='process_to_curated',
+        python_callable=run_staging_to_curated
+    )
 
-    t1 >> t2 >> t3
+    t1 >> t2 >> t3 >> t4

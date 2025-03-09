@@ -12,6 +12,9 @@ RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
 
 # Copy the entrypoint script into the container
 COPY ./DockerFiles/Airflow/entrypoint.sh /entrypoint.sh
+RUN echo "ALOALOALOALAOLAOLAOLAOLAOLAOLA"
+RUN ls -l
+RUN ls -l /
 RUN chmod +x /entrypoint.sh
 
 # Switch back to the airflow user
