@@ -5,6 +5,7 @@ import librosa
 from PIL import Image
 from minio import Minio
 from minio.error import S3Error
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 ###################################
 # Paramètres et Fonctions de base #
@@ -33,12 +34,9 @@ def get_spectrogram_bw(audio, sr):
         fmax=CFG.fmax
     )
     spec_db = librosa.power_to_db(spec, ref=np.max)
-
-    # Normalisation 0..1 puis passage en [0..255]
     spec_db -= spec_db.min()
     spec_db /= spec_db.max()
     spec_img_bw = (spec_db * 255).astype(np.uint8)
-
     return spec_img_bw
 
 def create_minio_client(endpoint, access_key, secret_key, secure=False):
@@ -63,37 +61,33 @@ def preprocess_all_audios_in_bucket(
     staging_access_key,
     staging_secret_key,
     staging_bucket,
-    secure=False
+    secure=False,
+    max_workers=8
 ):
     """
     1) Parcourt tous les objets du bucket 'raw_bucket'.
-    2) Pour chaque fichier audio, calcule un spectrogramme (bw) et stocke
+    2) Pour chaque fichier audio, calcule un spectrogramme (bw) et stocke :
        - un PNG (visualisation)
        - un .npy (matrice de spectrogramme)
        dans le bucket 'staging_bucket'.
     3) Ne force pas le sample rate et ne tronque pas l'audio.
+    Le traitement est parallélisé pour optimiser le temps d'exécution.
     """
-
-    # 1) Connexion aux deux clients Minio
     print(f"[Raw] Connexion à Minio: {raw_endpoint}")
     raw_client = create_minio_client(raw_endpoint, raw_access_key, raw_secret_key, secure=secure)
     print(f"[Staging] Connexion à Minio: {staging_endpoint}")
     staging_client = create_minio_client(staging_endpoint, staging_access_key, staging_secret_key, secure=secure)
 
-    # Vérifie/crée le staging bucket si besoin
     if not staging_client.bucket_exists(staging_bucket):
         print(f"Le bucket '{staging_bucket}' n'existe pas, création...")
         staging_client.make_bucket(staging_bucket)
 
-    # 2) Listage des objets dans le bucket 'raw_bucket'
     print(f"Parcours des objets dans le bucket '{raw_bucket}'...")
-    objects = raw_client.list_objects(raw_bucket, recursive=True)
+    objects = list(raw_client.list_objects(raw_bucket, recursive=True))
 
-    for obj in objects:
+    def process_object(obj):
         object_name = obj.object_name
         print(f"Traitement de l'objet : {object_name}")
-
-        # Téléchargement en mémoire
         try:
             response = raw_client.get_object(raw_bucket, object_name)
             audio_data = response.read()
@@ -101,40 +95,33 @@ def preprocess_all_audios_in_bucket(
             response.release_conn()
         except S3Error as e:
             print(f"Erreur Minio (get_object) sur '{object_name}' : {e}")
-            continue
+            return None
         except Exception as e:
             print(f"Erreur inattendue (lecture) '{object_name}': {e}")
-            continue
+            return None
 
-        # Charger l'audio avec librosa sans forcer le sample rate
         try:
             in_mem_file = io.BytesIO(audio_data)
-            audio, sr = librosa.load(in_mem_file, sr=None)  # sr=None => conserve SR d'origine
+            audio, sr = librosa.load(in_mem_file, sr=None)
         except Exception as e:
             print(f"Erreur lors du chargement audio (librosa) '{object_name}': {e}")
-            continue
+            return None
 
-        # Calcul du spectrogramme
         try:
-            spec_img_bw = get_spectrogram_bw(audio, sr)  # np.array (uint8)
+            spec_img_bw = get_spectrogram_bw(audio, sr)
         except Exception as e:
             print(f"Erreur lors du calcul du spectrogramme '{object_name}': {e}")
-            continue
+            return None
 
-        # Préparer les noms (racine identique, extensions .png et .npy)
         base_name = os.path.splitext(os.path.basename(object_name))[0]
         png_name = f"{base_name}.png"
         npy_name = f"{base_name}.npy"
 
-        ##############################
-        # 1) Sauvegarde du PNG en mémoire, upload
-        ##############################
         try:
-            pil_img = Image.fromarray(spec_img_bw)  # image en niveaux de gris
+            pil_img = Image.fromarray(spec_img_bw)
             img_buffer = io.BytesIO()
             pil_img.save(img_buffer, format="PNG")
-            img_buffer.seek(0)  # Remettre le pointeur au début
-
+            img_buffer.seek(0)
             staging_client.put_object(
                 staging_bucket,
                 png_name,
@@ -145,33 +132,33 @@ def preprocess_all_audios_in_bucket(
             print(f"Spectrogramme PNG envoyé : {staging_bucket}/{png_name}")
         except Exception as e:
             print(f"Erreur lors de la conversion/envoi PNG '{object_name}': {e}")
-            continue
+            return None
 
-        ##############################
-        # 2) Sauvegarde de la matrice en .npy, upload
-        ##############################
         try:
-            # spec_img_bw est un np.array (height, width), uint8
-            # Si vous préférez garder la version float, il faut
-            # avant la conversion en uint8 (cf. get_spectrogram_bw).
             npy_buffer = io.BytesIO()
             np.save(npy_buffer, spec_img_bw, allow_pickle=False)
             npy_buffer.seek(0)
-
             staging_client.put_object(
                 staging_bucket,
                 npy_name,
                 data=npy_buffer,
                 length=len(npy_buffer.getvalue()),
-                content_type="application/octet-stream"  # ou "application/x-npy" si vous préférez
+                content_type="application/octet-stream"
             )
             print(f"Spectrogramme NPY envoyé : {staging_bucket}/{npy_name}")
         except Exception as e:
             print(f"Erreur lors de la conversion/envoi NPY '{object_name}': {e}")
-            continue
+            return None
 
-    print("Traitement terminé.")
+        return base_name
 
+    results = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(process_object, obj): obj for obj in objects}
+        for future in as_completed(futures):
+            if future.result() is not None:
+                results.append(future.result())
+    print("Traitement terminé. Objets traités :", len(results))
 
 ################
 # Exemple main #
@@ -199,7 +186,8 @@ def main():
         staging_access_key=staging_access_key,
         staging_secret_key=staging_secret_key,
         staging_bucket=staging_bucket,
-        secure=False
+        secure=False,
+        max_workers=8
     )
 
 if __name__ == "__main__":

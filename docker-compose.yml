@@ -30,7 +30,7 @@ services:
     ports:
       - "27017:27017"
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh mongodb://localhost:27017/test --quiet
+      test: echo 'db.runCommand("ping").ok' | mongosh mongodb://mongo:27017/test --quiet
       interval: 10s
       retries: 5
       start_period: 5s
@@ -111,6 +111,9 @@ services:
 
     ports:
       - "8080:8080"
+    command: >
+      sh -c "socat TCP-LISTEN:27017,fork TCP:mongodb:27017 &
+      airflow scheduler & airflow webserver"
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
@@ -141,7 +144,7 @@ services:
       - POSTGRES_URI=postgresql+psycopg2://admin:admin@postgres:5432/maindb
 
       # Variables pour la connexion à Mongo
-      - MONGO_URI=mongodb://mongodb:27017
+      - MONGO_URI=mongodb://mongo:27017
 
 volumes:
   postgres_data:

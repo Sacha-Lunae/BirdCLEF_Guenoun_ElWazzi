@@ -10,7 +10,7 @@ def ingest_csv_from_minio_to_mongodb(
     secret_key: str,
     bucket_name: str,
     object_name: str,
-    mongo_uri: str = "mongodb://localhost:27017",
+    mongo_uri: str = "mongodb://mongo:27017",
     db_name: str = "birdclef",
     collection_name: str = "metadata",
     secure: bool = False
@@ -25,7 +25,7 @@ def ingest_csv_from_minio_to_mongodb(
     - endpoint : e.g. "localhost:9000"
     - secure : False si vous n'utilisez pas HTTPS
     - object_name : e.g. "filtered_metadata.csv"
-    - mongo_uri : e.g. "mongodb://localhost:27017"
+    - mongo_uri : e.g. "mongodb://mongo:27017"
     """
 
     print(f"Connexion à Minio sur {endpoint} (secure={secure})...")
@@ -91,7 +91,7 @@ def main():
     object_name = "filtered_metadata.csv"
 
     # Paramètres MongoDB
-    mongo_uri = "mongodb://localhost:27017"
+    mongo_uri = "mongodb://mongo:27017"
     db_name = "birdclef"
     collection_name = "metadata"
 
