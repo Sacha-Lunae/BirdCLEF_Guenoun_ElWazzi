@@ -57,19 +57,19 @@ def create_minio_client(endpoint, access_key, secret_key, secure=False):
 
 def curate_metadata_with_spectrograms_batch():
     # Connexion à la base source de metadata
-    source_client = MongoClient("mongodb://localhost:27017")
+    source_client = MongoClient("mongodb://mongodb:27017")
     source_db = source_client["birdclef"]   # Adaptez ce nom
     metadata_coll = source_db["metadata"]
 
     # Connexion à la base "curated" dans laquelle on va insérer les documents enrichis
-    curated_client = MongoClient("mongodb://localhost:27017")
+    curated_client = MongoClient("mongodb://mongodb:27017")
     curated_db = curated_client["curated"]
     curated_coll = curated_db["curated_data"]
     # On crée un objet GridFS dans la collection "spectrograms" de la base "curated"
     fs = gridfs.GridFS(curated_db, collection="spectrograms")
 
     # Connexion au bucket staging de Minio
-    staging_endpoint = "localhost:9000"   # Port S3 de Minio
+    staging_endpoint = "minio:9000"   # Port S3 de Minio
     staging_access_key = "minioadmin"
     staging_secret_key = "minioadmin"
     staging_bucket = "staging-bucket"
