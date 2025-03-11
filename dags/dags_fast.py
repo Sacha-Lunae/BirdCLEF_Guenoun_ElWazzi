@@ -1,5 +1,6 @@
 # ./dags/birdclef_dag_fast.py
 import os
+import time as t
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
