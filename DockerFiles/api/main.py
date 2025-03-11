@@ -203,42 +203,65 @@ def stats():
     }), 200
 @app.route("/compare", methods=["GET"])
 def compare():
-    # 1. Déclencher simultanément les deux DAGs
-    
-    # Générer des identifiants uniques pour chaque run
+    # 1. Déclencher d'abord le DAG d'ingestion
     ingest_run_id = f"trigger_via_api_{uuid.uuid4()}"
-    ingest_fast_run_id = f"trigger_via_api_{uuid.uuid4()}"
     
-    # Unpause les deux DAGs
+    # Dépauser le DAG ingest
     patch_url_ingest = f"{AIRFLOW_URL}/api/v1/dags/{DAG_ID}"
     patch_payload = {"is_paused": False}
-    requests.patch(patch_url_ingest, json=patch_payload, auth=(AIRFLOW_USERNAME, AIRFLOW_PASSWORD),
-                     headers={"Content-Type": "application/json"})
-    
-    patch_url_fast = f"{AIRFLOW_URL}/api/v1/dags/{DAG_FAST_ID}"
-    requests.patch(patch_url_fast, json=patch_payload, auth=(AIRFLOW_USERNAME, AIRFLOW_PASSWORD),
-                     headers={"Content-Type": "application/json"})
-    
-    # Déclencher les DAGs
+    patch_resp_ingest = requests.patch(
+        patch_url_ingest,
+        json=patch_payload,
+        auth=(AIRFLOW_USERNAME, AIRFLOW_PASSWORD),
+        headers={"Content-Type": "application/json"}
+    )
+    if patch_resp_ingest.status_code != 200:
+        return jsonify({"error": f"Erreur lors du dépausage du DAG {DAG_ID}: {patch_resp_ingest.text}"}), patch_resp_ingest.status_code
+
+    # Déclencher le DAG ingest
     trigger_url_ingest = f"{AIRFLOW_URL}/api/v1/dags/{DAG_ID}/dagRuns"
     trigger_payload_ingest = {"conf": {}, "dag_run_id": ingest_run_id}
-    resp_ingest = requests.post(trigger_url_ingest, json=trigger_payload_ingest,
-                                auth=(AIRFLOW_USERNAME, AIRFLOW_PASSWORD),
-                                headers={"Content-Type": "application/json"})
+    resp_ingest = requests.post(
+        trigger_url_ingest,
+        json=trigger_payload_ingest,
+        auth=(AIRFLOW_USERNAME, AIRFLOW_PASSWORD),
+        headers={"Content-Type": "application/json"}
+    )
+    if resp_ingest.status_code != 200:
+        return jsonify({"error": f"Erreur lors du déclenchement du DAG {DAG_ID}: {resp_ingest.text}"}), resp_ingest.status_code
+
+    # Attendre la fin du run du DAG ingest
+    run_data_ingest = wait_for_dag_run(DAG_ID, ingest_run_id)
+
+    # 2. Une fois terminé, déclencher le DAG fast
+    ingest_fast_run_id = f"trigger_via_api_{uuid.uuid4()}"
     
+    # Dépauser le DAG fast
+    patch_url_fast = f"{AIRFLOW_URL}/api/v1/dags/{DAG_FAST_ID}"
+    patch_resp_fast = requests.patch(
+        patch_url_fast,
+        json=patch_payload,
+        auth=(AIRFLOW_USERNAME, AIRFLOW_PASSWORD),
+        headers={"Content-Type": "application/json"}
+    )
+    if patch_resp_fast.status_code != 200:
+        return jsonify({"error": f"Erreur lors du dépausage du DAG {DAG_FAST_ID}: {patch_resp_fast.text}"}), patch_resp_fast.status_code
+
+    # Déclencher le DAG fast
     trigger_url_fast = f"{AIRFLOW_URL}/api/v1/dags/{DAG_FAST_ID}/dagRuns"
     trigger_payload_fast = {"conf": {}, "dag_run_id": ingest_fast_run_id}
-    resp_fast = requests.post(trigger_url_fast, json=trigger_payload_fast,
-                              auth=(AIRFLOW_USERNAME, AIRFLOW_PASSWORD),
-                              headers={"Content-Type": "application/json"})
-    
-    if resp_ingest.status_code != 200 or resp_fast.status_code != 200:
-        return jsonify({"error": "Erreur lors du déclenchement des DAGs"}), 500
-    
-    # 2. Attendre la fin des exécutions
-    run_data_ingest = wait_for_dag_run(DAG_ID, ingest_run_id)
+    resp_fast = requests.post(
+        trigger_url_fast,
+        json=trigger_payload_fast,
+        auth=(AIRFLOW_USERNAME, AIRFLOW_PASSWORD),
+        headers={"Content-Type": "application/json"}
+    )
+    if resp_fast.status_code != 200:
+        return jsonify({"error": f"Erreur lors du déclenchement du DAG {DAG_FAST_ID}: {resp_fast.text}"}), resp_fast.status_code
+
+    # Attendre la fin du run du DAG fast
     run_data_fast = wait_for_dag_run(DAG_FAST_ID, ingest_fast_run_id)
-    
+
     # 3. Récupérer les durées d'exécution de chaque tâche pour chaque DAG run
     def get_task_durations(dag_id, run_id):
         task_url = f"{AIRFLOW_URL}/api/v1/dags/{dag_id}/dagRuns/{run_id}/taskInstances"
@@ -251,15 +274,14 @@ def compare():
                 start = task.get("start_date")
                 end = task.get("end_date")
                 if start and end:
-                    # Convertir les dates ISO en objets datetime
                     dt_start = datetime.fromisoformat(start.replace("Z", "+00:00"))
                     dt_end = datetime.fromisoformat(end.replace("Z", "+00:00"))
                     durations[task_id] = (dt_end - dt_start).total_seconds()
         return durations
-    
+
     durations_ingest = get_task_durations(DAG_ID, ingest_run_id)
     durations_fast = get_task_durations(DAG_FAST_ID, ingest_fast_run_id)
-    
+
     # 4. Comparer les durées pour chaque tâche
     comparison = {}
     all_tasks = set(list(durations_ingest.keys()) + list(durations_fast.keys()))
@@ -271,16 +293,19 @@ def compare():
             "ingest_fast_duration": d_fast,
             "difference": (d_ingest - d_fast) if (d_ingest is not None and d_fast is not None) else None
         }
-    
-    # 5. Retourner la comparaison
+
+    # 5. Retourner le rapport complet
     return jsonify({
+        "ingest_run_id": ingest_run_id,
         "ingest_run_data": run_data_ingest,
+        "ingest_fast_run_id": ingest_fast_run_id,
         "ingest_fast_run_data": run_data_fast,
         "task_durations_ingest": durations_ingest,
         "task_durations_fast": durations_fast,
         "comparison": comparison,
         "timestamp": datetime.now().isoformat()
     }), 200
+
 if __name__ == "__main__":
     # Listen on 0.0.0.0 so Docker can map the port
     app.run(host="0.0.0.0", port=8000, debug=True)
