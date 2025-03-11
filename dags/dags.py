@@ -1,5 +1,7 @@
 # ./dags/birdclef_dag.py
-
+import requests as rq
+import time as t
+import os
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
@@ -8,25 +10,34 @@ def run_unpack_to_raw():
     """
     We'll directly import and call main() from your preprocess_to_raw.py
     """
+    # send a request to the API
+    os.system(f"curl -X http://localhost:8000/log?time={t.time()}&func={run_unpack_to_raw.__name__}&status=started")
     from scripts.unpack_to_raw import main
+    os.system(f"curl -X http://localhost:8000/log?time={t.time()}&func={run_unpack_to_raw.__name__}&status=ended")
     main()
 
 def run_preprocess_audiofiles_to_staging():
     """
     We'll directly import and call main() from ingest_csv_from_minio_to_mongodb.py
     """
+    os.system(f"curl -X http://localhost:8000/log?time={t.time()}&func={run_preprocess_audiofiles_to_staging.__name__}&status=started")
     from scripts.preprocess_audiofiles_to_staging import main
+    os.system(f"curl -X http://localhost:8000/log?time={t.time()}&func={run_preprocess_audiofiles_to_staging.__name__}&status=ended")
     main()
     
 def run_preprocess_metadata_to_staging():
     """
     We'll directly import and call main() from ingest_csv_from_minio_to_mongodb.py
     """
+    os.system(f"curl -X http://localhost:8000/log?time={t.time()}&func={run_preprocess_metadata_to_staging.__name__}&status=started")
     from scripts.preprocess_metadata_to_staging import main
+    os.system(f"curl -X http://localhost:8000/log?time={t.time()}&func={run_preprocess_metadata_to_staging.__name__}&status=ended")
     main()
 
 def run_staging_to_curated():
+    os.system(f"curl -X http://localhost:8000/log?time={t.time()}&func={run_staging_to_curated.__name__}&status=started")
     from scripts.process_to_curated import main
+    os.system(f"curl -X http://localhost:8000/log?time={t.time()}&func={run_staging_to_curated.__name__}&status=ended")
     main()
 
 default_args = {

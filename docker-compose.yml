@@ -30,7 +30,7 @@ services:
     ports:
       - "27017:27017"
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh mongodb://mongo:27017/test --quiet
+      test: echo 'db.runCommand("ping").ok' | mongosh mongodb://mongodb:27017/test --quiet
       interval: 10s
       retries: 5
       start_period: 5s
@@ -144,7 +144,7 @@ services:
       - POSTGRES_URI=postgresql+psycopg2://admin:admin@postgres:5432/maindb
 
       # Variables pour la connexion à Mongo
-      - MONGO_URI=mongodb://mongo:27017
+      - MONGO_URI=mongodb://mongodb:27017
 
 volumes:
   postgres_data:

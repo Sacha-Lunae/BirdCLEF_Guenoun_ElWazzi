@@ -89,7 +89,7 @@ def main():
     download_data_locally(audio_url, metadata_url, raw_dir="raw-test")
 
     # 2) Paramètres Minio
-    endpoint = "localhost:9000"
+    endpoint = "minio:9000"
     access_key = "minioadmin"
     secret_key = "minioadmin"
     bucket_name = "raw-bucket"

@@ -179,13 +179,13 @@ def preprocess_all_audios_in_bucket(
 
 def main():
     # Paramètres Minio "raw"
-    raw_endpoint = "localhost:9000"
+    raw_endpoint = "minio:9000"
     raw_access_key = "minioadmin"
     raw_secret_key = "minioadmin"
-    raw_bucket = "bucket-raw"
+    raw_bucket = "raw-bucket"
 
     # Paramètres Minio "staging"
-    staging_endpoint = "localhost:9000"
+    staging_endpoint = "minio:9000"
     staging_access_key = "minioadmin"
     staging_secret_key = "minioadmin"
     staging_bucket = "staging-bucket"
