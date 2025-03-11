@@ -87,7 +87,7 @@ def main():
     endpoint = "localhost:9000" 
     access_key = "minioadmin"
     secret_key = "minioadmin"
-    bucket_name = "raw_bucket"
+    bucket_name = "bucket-raw"
     object_name = "filtered_metadata.csv"
 
     # Paramètres MongoDB

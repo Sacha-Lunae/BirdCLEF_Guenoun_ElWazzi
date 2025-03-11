@@ -68,20 +68,20 @@ def create_minio_client(endpoint, access_key, secret_key, secure=False):
 
 def curate_metadata_with_spectrograms_batch():
     # Connect to the source metadata database
-    source_client = MongoClient("mongodb://localhost:27017")
+    source_client = MongoClient("mongodb://mongodb:27017")
     source_db = source_client["birdclef"]   # Adjust as necessary
     metadata_coll = source_db["metadata"]
 
     # Connect to the "curated" database for enriched documents
-    curated_client = MongoClient("mongodb://localhost:27017")
-    curated_db = curated_client["curated"]
+    curated_client = MongoClient("mongodb://mongodb:27017")
+    curated_db = curated_client["birdclef"]
     curated_coll = curated_db["curated_data"]
     
     # Create a GridFS object in the "spectrograms" collection of the curated database
     fs = gridfs.GridFS(curated_db, collection="spectrograms")
 
     # Connect to the staging bucket in Minio
-    staging_endpoint = "localhost:9000"   # S3 port for Minio
+    staging_endpoint = "minio:9000"   # S3 port for Minio
     staging_access_key = "minioadmin"
     staging_secret_key = "minioadmin"
     staging_bucket = "staging-bucket"
@@ -184,13 +184,13 @@ def curate_metadata_with_spectrograms_batch():
         # Batch insertion to limit memory usage
         if len(batch_docs) >= BATCH_SIZE:
             curated_coll.insert_many(batch_docs)
-            print(f"{len(batch_docs)} documents inserted into 'curated.curated_data'.")
+            print(f"{len(batch_docs)} documents inserted into 'birdclef.curated_data'.")
             batch_docs = []  # Reset for next batch
 
     # Insert the final batch, if any
     if batch_docs:
         curated_coll.insert_many(batch_docs)
-        print(f"{len(batch_docs)} documents inserted into 'curated.curated_data' (final batch).")
+        print(f"{len(batch_docs)} documents inserted into 'birdclef.curated_data' (final batch).")
 
     print(f"Processing completed. Documents processed: {count_processed} out of {count_total}.")
 

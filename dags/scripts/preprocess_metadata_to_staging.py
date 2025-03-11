@@ -84,7 +84,7 @@ def ingest_csv_from_minio_to_mongodb(
 
 def main():
     # Paramètres Minio
-    endpoint = "localhost:9000" 
+    endpoint = "minio:9000" 
     access_key = "minioadmin"
     secret_key = "minioadmin"
     bucket_name = "raw-bucket"
